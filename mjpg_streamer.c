@@ -80,6 +80,19 @@ static void help(char *progname)
             "   path and filename:\n" \
             "   %s -i \"/path/to/modules/input_uvc.so\"\n", progname);
     fprintf(stderr, "-----------------------------------------------------------------------\n");
+    fprintf(stderr, "Quick start (no -i / -o):\n" \
+            "  Run from the build directory with plugins and ./www present.\n" \
+            "  Default is UVC + HTTP: ./input_uvc.so -d /dev/video0 -r 1920x1080 -f 60\n" \
+            "  and output_http.so -w ./www -p 8080\n" \
+            "  Override with environment variables:\n" \
+            "   MJPG_INPUT          full input plugin string (replaces default UVC line)\n" \
+            "   MJPG_INPUT_PLUGIN   plugin path (default: ./input_uvc.so)\n" \
+            "   MJPG_DEVICE         V4L2 device (default: /dev/video0)\n" \
+            "   MJPG_RESOLUTION     e.g. 1920x1080 (default: 1920x1080)\n" \
+            "   MJPG_FPS            frames per second (default: 60)\n" \
+            "   MJPG_WWW            HTTP static files dir (default: ./www)\n" \
+            "   MJPG_PORT           HTTP TCP port (default: 8080)\n");
+    fprintf(stderr, "-----------------------------------------------------------------------\n");
 }
 
 /******************************************************************************
@@ -191,13 +204,12 @@ Return Value:
 ******************************************************************************/
 int main(int argc, char *argv[])
 {
-    //char *input  = "input_uvc.so --resolution 640x480 --fps 5 --device /dev/video0";
     char *input[MAX_INPUT_PLUGINS];
     char *output[MAX_OUTPUT_PLUGINS];
+    static char default_output_line[512];
     int daemon = 0, i, j;
     size_t tmp = 0;
 
-    output[0] = "output_http.so --port 8080";
     global.outcnt = 0;
     global.incnt = 0;
 
@@ -279,10 +291,57 @@ int main(int argc, char *argv[])
     LOG("MJPG Streamer Version.: %s\n", SOURCE_VERSION);
 #endif
 
-    /* check if at least one output plugin was selected */
+    /* default output: HTTP with ./www (when no -o); tunable via MJPG_WWW / MJPG_PORT */
     if(global.outcnt == 0) {
-        /* no? Then use the default plugin instead */
+        const char *www = getenv("MJPG_WWW");
+        const char *port = getenv("MJPG_PORT");
+        if(www == NULL || www[0] == '\0') {
+            www = "./www";
+        }
+        if(port == NULL || port[0] == '\0') {
+            port = "8080";
+        }
+        snprintf(default_output_line, sizeof(default_output_line),
+                 "output_http.so -w %s -p %s", www, port);
+        output[0] = default_output_line;
         global.outcnt = 1;
+        LOG("no -o/--output: using default %s\n", default_output_line);
+    }
+
+    /* default input: UVC (when no -i); tunable via MJPG_* env vars or MJPG_INPUT */
+    if(global.incnt == 0) {
+        const char *mjpg_in = getenv("MJPG_INPUT");
+        if(mjpg_in != NULL && mjpg_in[0] != '\0') {
+            input[global.incnt++] = strdup(mjpg_in);
+            LOG("no -i/--input: using MJPG_INPUT\n");
+        } else {
+            const char *plug = getenv("MJPG_INPUT_PLUGIN");
+            const char *dev = getenv("MJPG_DEVICE");
+            const char *res = getenv("MJPG_RESOLUTION");
+            const char *fps = getenv("MJPG_FPS");
+            char *line;
+            if(plug == NULL || plug[0] == '\0') {
+                plug = "./input_uvc.so";
+            }
+            if(dev == NULL || dev[0] == '\0') {
+                dev = "/dev/video0";
+            }
+            if(res == NULL || res[0] == '\0') {
+                res = "1920x1080";
+            }
+            if(fps == NULL || fps[0] == '\0') {
+                fps = "60";
+            }
+            line = malloc(512);
+            if(line == NULL) {
+                LOG("ERROR: out of memory building default input\n");
+                closelog();
+                exit(EXIT_FAILURE);
+            }
+            snprintf(line, 512, "%s -d %s -r %s -f %s", plug, dev, res, fps);
+            input[global.incnt++] = line;
+            LOG("no -i/--input: using default UVC %s\n", line);
+        }
     }
 
     /* open input plugin */

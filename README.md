@@ -30,19 +30,19 @@ Input plugins:
 
 * input_file
 * input_http
-* input_opencv ([documentation](mjpg-streamer-experimental/plugins/input_opencv/README.md))
+* input_opencv ([documentation](plugins/input_opencv/README.md))
 * input_ptp2
-* input_raspicam ([documentation](mjpg-streamer-experimental/plugins/input_raspicam/README.md))
-* input_uvc ([documentation](mjpg-streamer-experimental/plugins/input_uvc/README.md))
+* input_raspicam ([documentation](plugins/input_raspicam/README.md))
+* input_uvc ([documentation](plugins/input_uvc/README.md))
 
 Output plugins:
 
 * output_file
-* output_http ([documentation](mjpg-streamer-experimental/plugins/output_http/README.md))
+* output_http ([documentation](plugins/output_http/README.md))
 * ~output_rtsp~ (not functional)
 * ~output_udp~ (not functional)
-* output_viewer ([documentation](mjpg-streamer-experimental/plugins/output_viewer/README.md))
-* output_zmqserver ([documentation](mjpg-streamer-experimental/plugins/output_zmqserver/README.md))
+* output_viewer ([documentation](plugins/output_viewer/README.md))
+* output_zmqserver ([documentation](plugins/output_zmqserver/README.md))
 
 Building & Installation
 =======================
@@ -61,14 +61,12 @@ Simple compilation
 
 This will build and install all plugins that can be compiled.
 
-    cd mjpg-streamer-experimental
     make
     sudo make install
     
 By default, everything will be compiled in "release" mode. If you wish to compile
 with debugging symbols enabled, you can do this:
 
-    cd mjpg-streamer-experimental
     make distclean
     make CMAKE_BUILD_TYPE=Debug
     sudo make install
@@ -79,7 +77,6 @@ Advanced compilation (via CMake)
 There are options available to enable/disable plugins, setup options, etc. This
 shows the basic steps to enable the experimental HTTP management feature:
 
-    cd mjpg-streamer-experimental
     mkdir _build
     cd _build
     cmake -DENABLE_HTTP_MANAGEMENT=ON ..
@@ -88,14 +85,70 @@ shows the basic steps to enable the experimental HTTP management feature:
 
 Usage
 =====
-From the mjpeg streamer experimental
-folder:
+From the project folder:
 ```
 export LD_LIBRARY_PATH=.
 ./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so"
 ```
 
-See [README.md](mjpg-streamer-experimental/README.md) or the individual plugin's documentation for more details.
+See [README.md](README.md) or the individual plugin's documentation for more details.
+
+Stream control webapp (autostart)
+---------------------------------
+
+This fork includes `streamctl_service.py`: a small HTTP
+service with a browser page to start/stop the stream and change device, resolution,
+FPS, and HTTP port. It listens on **8899** by default; the MJPEG pages from
+`output_http` are on **8080** (or whatever stream HTTP port you set).
+
+**Install and enable at boot (systemd):**
+
+    sudo ./scripts/install-streamctl-autostart.sh
+
+**Useful commands:**
+
+    sudo systemctl status mjpg-streamctl    # running? logs tail
+    sudo systemctl restart mjpg-streamctl   # reload after code or unit changes
+    sudo systemctl stop mjpg-streamctl       # stop the control service only
+    sudo systemctl disable --now mjpg-streamctl   # remove from autostart and stop
+
+**Optional settings** (then `sudo systemctl restart mjpg-streamctl`):
+
+Create or edit `/etc/default/mjpg-streamctl` with lines such as:
+
+    STREAMCTL_BIND=127.0.0.1
+    STREAMCTL_PORT=8899
+
+The unit file is `systemd/mjpg-streamctl.service`.
+
+**Run the control service manually** (no systemd):
+
+    python3 streamctl_service.py
+
+Open `http://<pi-ip>:8899/` in a browser for the control page (`/?html=1` forces HTML if needed).
+
+Client integration (JS / Java / VLC)
+-----------------------------------
+
+The stream is standard MJPEG over HTTP:
+
+- **MJPEG stream URL**: `http://<pi-ip>:8080/?action=stream`
+- **Snapshot URL**: `http://<pi-ip>:8080/?action=snapshot`
+
+**JavaScript (web page)**:
+
+```html
+<img src="http://<pi-ip>:8080/?action=stream" />
+```
+
+**VLC / VideoLAN**:
+
+- Open Network Stream → `http://<pi-ip>:8080/?action=stream`
+
+**Java**:
+
+- Use any MJPEG-capable viewer/library and point it at `http://<pi-ip>:8080/?action=stream`.
+  (We removed the old Java applet pages from `www/`; modern browsers don’t support them anyway.)
 
 Discussion / Questions / Help
 =============================

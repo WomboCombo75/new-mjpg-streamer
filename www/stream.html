@@ -1,0 +1,45 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Camera Stream</title>
+    <meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+    <link rel="stylesheet" href="style.css" type="text/css" />
+    <!--[if IE 6]>
+    <link rel="stylesheet" href="fix.css" type="text/css" />
+    <![endif]-->
+  </head>
+
+  <body>
+    <div id="sidebar">
+      <h1>Camera Stream</h1>
+      <h2>web UI</h2>
+
+      <div id="menu">
+        <a href="index.html">Home</a>
+        <a href="static.html">Snapshot</a> 
+        <a class="active" href="stream.html">Stream</a> 
+        <a target="_blank" onClick="window.open(this.href, '_blank','width=400,height=400'); return false;" href="control.htm">Controls</a>
+      </div>
+
+      <h3>Status</h3>
+      <p>Stream page loaded.</p>
+    </div>
+
+    <div id="content">
+      <h1>Stream</h1>
+      <h2>Display the stream</h2>
+
+      <h3>Hints</h3>
+      <p>This page shows the MJPEG stream. If your browser struggles, try <a href="stream_simple.html">stream_simple.html</a>.</p>
+
+      <h3>Source snippet</h3>
+      <p><pre>&lt;img src="./?action=stream" /&gt;</pre></p>
+
+      <p>
+        <img id="streamimage" src="./?action=stream" alt="Live stream" style="max-width: 100%; height: auto;" />
+      </p>
+
+	<p>Local device stream UI.</p>
+  </body>
+</html>

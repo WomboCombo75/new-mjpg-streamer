@@ -1,0 +1,14 @@
+TODO list (updated 2026)
+
+Core:
+- Implement string-type control handling (V4L2 string controls).
+- Runtime resolution change without restarting capture (currently easiest is restart with new settings).
+- Put capture timestamp into EXIF (JPEG metadata).
+
+Config / UX:
+- Save/load configuration: handled externally via `streamctl_service.py` (writes `.streamctl_config.json`).
+
+Plugins:
+- UDP/RTP based streaming plugin.
+- `output_file`: record MJPEG video (not just frames).
+

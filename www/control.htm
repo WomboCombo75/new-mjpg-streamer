@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Controls</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" type="text/css" />
+  </head>
+  <body>
+    <div id="sidebar">
+      <h1>Camera Stream</h1>
+      <h2>web UI</h2>
+
+      <div id="menu">
+        <a href="index.html">Home</a>
+        <a href="stream.html">Stream</a>
+        <a href="static.html">Snapshot</a>
+        <a class="active" href="control.htm">Controls</a>
+      </div>
+
+      <h3>Status</h3>
+      <p>Controls page loaded.</p>
+    </div>
+
+    <div id="content">
+      <h1>Controls</h1>
+      <h2>Start/stop and advanced commands</h2>
+
+      <h3>Start/stop and configuration</h3>
+      <p>
+        Use the stream control service:
+        <code>http://&lt;pi-ip&gt;:8899/</code>
+      </p>
+
+      <h3>Stream endpoints</h3>
+      <p>
+        <strong>Stream</strong>: <code>./?action=stream</code><br />
+        <strong>Snapshot</strong>: <code>./?action=snapshot</code>
+      </p>
+
+      <h3>Advanced plugin commands</h3>
+      <p>
+        MJPG-streamer exposes a command endpoint:
+        <code>./?action=command&amp;dest=...&amp;plugin=...&amp;id=...&amp;group=...&amp;value=...</code>
+      </p>
+      <p>
+        This fork removed the legacy JavaScript-heavy controls UI to keep the
+        web UI compact and dependency-free.
+      </p>
+    </div>
+  </body>
+</html>
+

@@ -1,0 +1,31 @@
+[Unit]
+Description=MJPG stream control webapp (streamctl_service.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/legacy/mjpg-streamer
+
+# Streamer build dir (mjpg_streamer, *.so, www/)
+Environment=MJPG_STREAMER_ROOT=/home/pi/legacy/mjpg-streamer
+
+# Control UI + API: http://<this-pi>:8899/  (HTML)  —  LAN-wide; use 127.0.0.1 for localhost-only
+Environment=STREAMCTL_BIND=0.0.0.0
+Environment=STREAMCTL_PORT=8899
+
+# Optional auth for LAN exposure:
+# Environment=STREAMCTL_TOKEN=change-me
+
+# Optional overrides without editing this file:
+#   sudo sh -c 'echo STREAMCTL_BIND=127.0.0.1 >> /etc/default/mjpg-streamctl'
+EnvironmentFile=-/etc/default/mjpg-streamctl
+
+ExecStart=/usr/bin/python3 /home/pi/legacy/mjpg-streamer/streamctl_service.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

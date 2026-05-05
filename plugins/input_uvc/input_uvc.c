@@ -245,6 +245,10 @@ int input_init(input_parameter *param, int id)
         case 3:
             DBG("case 2,3\n");
             dev = realpath(optarg, NULL);
+            if(dev == NULL) {
+                /* realpath() can fail in restricted environments; fall back to the raw value */
+                dev = strdup(optarg);
+            }
             break;
 
         /* r, resolution */
