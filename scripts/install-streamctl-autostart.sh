@@ -22,4 +22,4 @@ systemctl daemon-reload
 systemctl enable mjpg-streamctl.service
 systemctl restart mjpg-streamctl.service
 systemctl --no-pager --full status mjpg-streamctl.service || true
-echo "Done. Open http://$(hostname -I | awk '{print $1}'):8899/ in a browser (control page)."
+echo "Done. Open http://$(hostname -I | awk '{print $1}'):8899/?html=1 in a browser (control page)."
