@@ -99,7 +99,8 @@ Stream control webapp (autostart)
 This fork includes `streamctl_service.py`: a small HTTP
 service with a browser page to start/stop the stream and change device, resolution,
 FPS, and HTTP port. It listens on **8899** by default; the MJPEG pages from
-`output_http` are on **8080** (or whatever stream HTTP port you set).
+`output_http` are **proxied under `http://<pi-ip>:8899/mjpeg/`**. (Internally the
+streamer still uses **8080** by default and is typically bound to localhost.)
 
 **Install and enable at boot (systemd):**
 
@@ -125,25 +126,28 @@ The unit file is `systemd/mjpg-streamctl.service`.
 
     python3 streamctl_service.py
 
-Open `http://<pi-ip>:8899/` in a browser for the control page (`/?html=1` forces HTML if needed).
+Open `http://<pi-ip>:8899/?html=1` in a browser for the control page.
+
+The page includes **camera controls** (brightness/contrast/etc.) and a **Live preview**
+so you can see changes immediately.
 
 Client integration (JS / Java / VLC)
 -----------------------------------
 
 The stream is standard MJPEG over HTTP:
 
-- **MJPEG stream URL**: `http://<pi-ip>:8080/?action=stream`
-- **Snapshot URL**: `http://<pi-ip>:8080/?action=snapshot`
+- **MJPEG stream URL (recommended)**: `http://<pi-ip>:8899/mjpeg/?action=stream`
+- **Snapshot URL (recommended)**: `http://<pi-ip>:8899/mjpeg/?action=snapshot`
 
 **JavaScript (web page)**:
 
 ```html
-<img src="http://<pi-ip>:8080/?action=stream" />
+<img src="http://<pi-ip>:8899/mjpeg/?action=stream" />
 ```
 
 **VLC / VideoLAN**:
 
-- Open Network Stream → `http://<pi-ip>:8080/?action=stream`
+- Open Network Stream → `http://<pi-ip>:8899/mjpeg/?action=stream`
 
 **Java**:
 

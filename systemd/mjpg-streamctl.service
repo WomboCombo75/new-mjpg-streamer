@@ -12,6 +12,10 @@ WorkingDirectory=/home/pi/legacy/mjpg-streamer
 # Streamer build dir (mjpg_streamer, *.so, www/)
 Environment=MJPG_STREAMER_ROOT=/home/pi/legacy/mjpg-streamer
 
+# Hide the legacy MJPEG web UI behind streamctl (/mjpeg/):
+# output_http will bind only to localhost.
+Environment=MJPG_LISTEN=127.0.0.1
+
 # Control UI + API: http://<this-pi>:8899/  (HTML)  —  LAN-wide; use 127.0.0.1 for localhost-only
 Environment=STREAMCTL_BIND=0.0.0.0
 Environment=STREAMCTL_PORT=8899

@@ -1,25 +1,3 @@
-/*******************************************************************************
-#                                                                              #
-#      MJPG-streamer allows to stream JPG frames from an input-plugin          #
-#      to several output plugins                                               #
-#                                                                              #
-#      Copyright (C) 2007 Tom Stöveken                                         #
-#                                                                              #
-# This program is free software; you can redistribute it and/or modify         #
-# it under the terms of the GNU General Public License as published by         #
-# the Free Software Foundation; version 2 of the License.                      #
-#                                                                              #
-# This program is distributed in the hope that it will be useful,              #
-# but WITHOUT ANY WARRANTY; without even the implied warranty of               #
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                #
-# GNU General Public License for more details.                                 #
-#                                                                              #
-# You should have received a copy of the GNU General Public License            #
-# along with this program; if not, write to the Free Software                  #
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA    #
-#                                                                              #
-*******************************************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,11 +12,6 @@
 
 #include "utils.h"
 
-/******************************************************************************
-Description.:
-Input Value.:
-Return Value:
-******************************************************************************/
 void daemon_mode(void)
 {
     int fr = 0;
@@ -86,10 +59,6 @@ void daemon_mode(void)
 }
 
 
-/*
- * Common webcam resolutions with information from
- * http://en.wikipedia.org/wiki/Graphics_display_resolution
- */
 static const struct {
     const char *string;
     const int width, height;
@@ -109,15 +78,9 @@ static const struct {
     { "FHD",   1920, 1280 },
 };
 
-/******************************************************************************
-Description.: convienence function for input plugins
-Input Value.:
-Return Value:
-******************************************************************************/
 void parse_resolution_opt(const char * optarg, int * width, int * height) {
     int i;
 
-    /* try to find the resolution in lookup table "resolutions" */
     for(i = 0; i < LENGTH_OF(resolutions); i++) {
         if(strcmp(resolutions[i].string, optarg) == 0) {
             *width  = resolutions[i].width;
@@ -126,7 +89,6 @@ void parse_resolution_opt(const char * optarg, int * width, int * height) {
         }
     }
     
-    /* parse value as decimal value */
     if (sscanf(optarg, "%dx%d", width, height) != 2) {
         fprintf(stderr, "Invalid height/width '%s' specified!\n", optarg);
         exit(EXIT_FAILURE);

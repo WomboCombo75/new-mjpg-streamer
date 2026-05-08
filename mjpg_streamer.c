@@ -1,25 +1,3 @@
-/*******************************************************************************
-#                                                                              #
-#      MJPG-streamer allows to stream JPG frames from an input-plugin          #
-#      to several output plugins                                               #
-#                                                                              #
-#      Copyright (C) 2007 Tom Stöveken                                         #
-#                                                                              #
-# This program is free software; you can redistribute it and/or modify         #
-# it under the terms of the GNU General Public License as published by         #
-# the Free Software Foundation; version 2 of the License.                      #
-#                                                                              #
-# This program is distributed in the hope that it will be useful,              #
-# but WITHOUT ANY WARRANTY; without even the implied warranty of               #
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                #
-# GNU General Public License for more details.                                 #
-#                                                                              #
-# You should have received a copy of the GNU General Public License            #
-# along with this program; if not, write to the Free Software                  #
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA    #
-#                                                                              #
-*******************************************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -42,14 +20,8 @@
 #include "utils.h"
 #include "mjpg_streamer.h"
 
-/* globals */
 static globals global;
 
-/******************************************************************************
-Description.: Display a help message
-Input Value.: argv[0] is the program name and the parameter progname
-Return Value: -
-******************************************************************************/
 static void help(char *progname)
 {
     fprintf(stderr, "-----------------------------------------------------------------------\n");
@@ -95,24 +67,14 @@ static void help(char *progname)
     fprintf(stderr, "-----------------------------------------------------------------------\n");
 }
 
-/******************************************************************************
-Description.: pressing CTRL+C sends signals to this process instead of just
-              killing it plugins can tidily shutdown and free allocated
-              resources. The function prototype is defined by the system,
-              because it is a callback function.
-Input Value.: sig tells us which signal was received
-Return Value: -
-******************************************************************************/
 static void signal_handler(int sig)
 {
     int i;
 
-    /* signal "stop" to threads */
     LOG("setting signal to stop\n");
     global.stop = 1;
     usleep(1000 * 1000);
 
-    /* clean up threads */
     LOG("force cancellation of threads and cleanup resources\n");
     for(i = 0; i < global.incnt; i++) {
         global.in[i].stop(i);
@@ -134,7 +96,6 @@ static void signal_handler(int sig)
     }
     usleep(1000 * 1000);
 
-    /* close handles of input plugins */
     for(i = 0; i < global.incnt; i++) {
         dlclose(global.in[i].handle);
     }
@@ -197,11 +158,6 @@ static int split_parameters(char *parameter_string, int *argc, char **argv)
     return 1;
 }
 
-/******************************************************************************
-Description.:
-Input Value.:
-Return Value:
-******************************************************************************/
 int main(int argc, char *argv[])
 {
     char *input[MAX_INPUT_PLUGINS];
@@ -213,7 +169,6 @@ int main(int argc, char *argv[])
     global.outcnt = 0;
     global.incnt = 0;
 
-    /* parameter parsing */
     while(1) {
         int c = 0;
         static struct option long_options[] = {
@@ -227,7 +182,6 @@ int main(int argc, char *argv[])
 
         c = getopt_long(argc, argv, "hi:o:vb", long_options, NULL);
 
-        /* no more options to parse */
         if(c == -1) break;
 
         switch(c) {
@@ -265,50 +219,47 @@ int main(int argc, char *argv[])
     //openlog("MJPG-streamer ", LOG_PID|LOG_CONS|LOG_PERROR, LOG_USER);
     syslog(LOG_INFO, "starting application");
 
-    /* fork to the background */
     if(daemon) {
         LOG("enabling daemon mode");
         daemon_mode();
     }
 
-    /* ignore SIGPIPE (send by OS if transmitting to closed TCP sockets) */
     signal(SIGPIPE, SIG_IGN);
 
-    /* register signal handler for <CTRL>+C in order to clean up */
     if(signal(SIGINT, signal_handler) == SIG_ERR) {
         LOG("could not register signal handler\n");
         closelog();
         exit(EXIT_FAILURE);
     }
 
-    /*
-     * messages like the following will only be visible on your terminal
-     * if not running in daemon mode
-     */
 #ifdef GIT_HASH
     LOG("MJPG Streamer Version: git rev: %s\n", GIT_HASH);
 #else
     LOG("MJPG Streamer Version.: %s\n", SOURCE_VERSION);
 #endif
 
-    /* default output: HTTP with ./www (when no -o); tunable via MJPG_WWW / MJPG_PORT */
     if(global.outcnt == 0) {
         const char *www = getenv("MJPG_WWW");
         const char *port = getenv("MJPG_PORT");
+        const char *listen = getenv("MJPG_LISTEN");
         if(www == NULL || www[0] == '\0') {
             www = "./www";
         }
         if(port == NULL || port[0] == '\0') {
             port = "8080";
         }
-        snprintf(default_output_line, sizeof(default_output_line),
-                 "output_http.so -w %s -p %s", www, port);
+        if(listen != NULL && listen[0] != '\0') {
+            snprintf(default_output_line, sizeof(default_output_line),
+                     "output_http.so -w %s -p %s -l %s", www, port, listen);
+        } else {
+            snprintf(default_output_line, sizeof(default_output_line),
+                     "output_http.so -w %s -p %s", www, port);
+        }
         output[0] = default_output_line;
         global.outcnt = 1;
         LOG("no -o/--output: using default %s\n", default_output_line);
     }
 
-    /* default input: UVC (when no -i); tunable via MJPG_* env vars or MJPG_INPUT */
     if(global.incnt == 0) {
         const char *mjpg_in = getenv("MJPG_INPUT");
         if(mjpg_in != NULL && mjpg_in[0] != '\0') {
@@ -344,9 +295,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* open input plugin */
     for(i = 0; i < global.incnt; i++) {
-        /* this mutex and the conditional variable are used to synchronize access to the global picture buffer */
         if(pthread_mutex_init(&global.in[i].db, NULL) != 0) {
             LOG("could not initialize mutex variable\n");
             closelog();
@@ -388,7 +337,6 @@ int main(int argc, char *argv[])
             LOG("%s\n", dlerror());
             exit(EXIT_FAILURE);
         }
-        /* try to find optional command */
         global.in[i].cmd = dlsym(global.in[i].handle, "input_cmd");
 
         global.in[i].param.parameters = strchr(input[i], ' ');
@@ -408,7 +356,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* open output plugin */
     for(i = 0; i < global.outcnt; i++) {
         tmp = (size_t)(strchr(output[i], ' ') - output[i]);
         global.out[i].plugin = (tmp > 0) ? strndup(output[i], tmp) : strdup(output[i]);
@@ -437,7 +384,6 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
-        /* try to find optional command */
         global.out[i].cmd = dlsym(global.out[i].handle, "output_cmd");
 
         global.out[i].param.parameters = strchr(output[i], ' ');
@@ -456,7 +402,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* start to read the input, push pictures into global buffer */
     DBG("starting %d input plugin\n", global.incnt);
     for(i = 0; i < global.incnt; i++) {
         syslog(LOG_INFO, "starting input plugin %s", global.in[i].plugin);
@@ -473,7 +418,6 @@ int main(int argc, char *argv[])
         global.out[i].run(global.out[i].param.id);
     }
 
-    /* wait for signals */
     pause();
 
     return 0;

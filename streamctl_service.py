@@ -37,6 +37,7 @@ import sys
 import threading
 import urllib.parse
 import urllib.request
+import http.client
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, Optional, Tuple, Type
 
@@ -390,7 +391,7 @@ button{padding:.35rem .75rem;margin-right:.5rem}
 <p>This page talks to the <strong>control</strong> service on this port. The camera <strong>web UI</strong>
 (MJPG-streamer <code>www/</code> pages, snapshot, stream) is on the <strong>stream HTTP port</strong> below
 (usually 8080). Open it in another tab if the menu or live stream is what you want.</p>
-<p>Open MJPEG site: <a id="mjpeg" href="#">(start stream first)</a></p>
+<p>MJPEG UI: <a id="mjpegProxy" href="/mjpeg/">/mjpeg/</a> (available when running)</p>
 <h2>Settings</h2>
 <div class="row"><label>Device</label>
   <select id="device" style="min-width: 18rem"></select>
@@ -427,6 +428,21 @@ button{padding:.35rem .75rem;margin-right:.5rem}
 <span id="loghint"></span>
 </p>
 <pre id="log" style="white-space:pre-wrap;word-break:break-word;background:#f7f7f7;border-radius:6px;padding:.75rem;max-height:240px;overflow:auto;margin:.5rem 0"></pre>
+<h2>Live preview</h2>
+<p class="status" style="background:transparent;padding:0;margin:.25rem 0">
+  <button type="button" id="btnPreviewOn">Start preview</button>
+  <button type="button" id="btnPreviewOff">Stop preview</button>
+  <span id="previewStatus"></span>
+</p>
+<div style="background:#f7f7f7;border-radius:6px;padding:.5rem;margin:.5rem 0">
+  <img id="preview" alt="Live preview" style="max-width:100%;height:auto;display:block" />
+</div>
+<h2>Camera controls</h2>
+<p>
+  <button type="button" id="btnCtlLoad">Load controls</button>
+  <span id="ctlStatus"></span>
+</p>
+<div id="controls" style="background:#f7f7f7;border-radius:6px;padding:.75rem;max-height:280px;overflow:auto"></div>
 <p class="err" id="err"></p>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -436,9 +452,9 @@ function mjpegBase() {
   return 'http://' + h + ':' + p + '/';
 }
 function setMjpegLink() {
-  const a = $('mjpeg');
-  a.href = mjpegBase();
-  a.textContent = mjpegBase();
+  const a = $('mjpegProxy');
+  a.href = '/mjpeg/';
+  a.textContent = '/mjpeg/';
 }
 async function load() {
   $('err').textContent = '';
@@ -578,6 +594,195 @@ function setAuto(on) {
 }
 $('btnLogRefresh').onclick = load;
 $('btnLogAuto').onclick = () => setAuto(!autoTimer);
+
+function setPreviewStatus(msg, color) {
+  const el = $('previewStatus');
+  el.textContent = msg ? (' ' + msg) : '';
+  el.style.color = color || '#111';
+}
+
+function startPreview() {
+  const img = $('preview');
+  // cache-bust so browsers reconnect; MJPEG stream keeps the connection open
+  img.src = '/mjpeg/?action=stream&t=' + Date.now();
+  setPreviewStatus('running', '#0a7a28');
+}
+
+function stopPreview() {
+  const img = $('preview');
+  img.removeAttribute('src');
+  img.src = '';
+  setPreviewStatus('stopped', '#111');
+}
+
+$('btnPreviewOn').onclick = startPreview;
+$('btnPreviewOff').onclick = stopPreview;
+
+function setCtlStatus(msg, color) {
+  const el = $('ctlStatus');
+  el.textContent = msg ? (' ' + msg) : '';
+  el.style.color = color || '#111';
+}
+
+function cmdUrl(dest, plugin, id, group, value) {
+  const p = new URLSearchParams({
+    action: 'command',
+    dest: String(dest),
+    plugin: String(plugin),
+    id: String(id),
+    group: String(group),
+    value: String(value),
+  });
+  return '/mjpeg/?' + p.toString();
+}
+
+async function sendControl(control) {
+  // input controls: dest=0, plugin index=0
+  const url = cmdUrl(0, 0, control.id, control.group, control.value);
+  await fetch(url, { cache: 'no-store' });
+}
+
+function renderControls(j) {
+  const root = $('controls');
+  root.innerHTML = '';
+  const list = (j && j.controls) ? j.controls : [];
+  if (!list.length) {
+    root.textContent = '(no controls)';
+    return;
+  }
+  let currentSection = null;
+  for (const c of list) {
+    const type = parseInt(c.type, 10);
+    if (type === 6) {
+      const h = document.createElement('div');
+      h.style.fontWeight = '600';
+      h.style.margin = '0.25rem 0 0.5rem 0';
+      h.textContent = c.name || 'Controls';
+      root.appendChild(h);
+      currentSection = h;
+      continue;
+    }
+
+    const row = document.createElement('div');
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '12rem 1fr';
+    row.style.gap = '0.5rem';
+    row.style.alignItems = 'center';
+    row.style.margin = '0.25rem 0';
+
+    const label = document.createElement('div');
+    label.textContent = c.name || ('id ' + c.id);
+    label.style.fontSize = '13px';
+    row.appendChild(label);
+
+    const cell = document.createElement('div');
+
+    if (type === 1) {
+      // integer: slider + number
+      const min = parseInt(c.min, 10);
+      const max = parseInt(c.max, 10);
+      const step = parseInt(c.step, 10) || 1;
+      const val = parseInt(c.value, 10);
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.gap = '0.5rem';
+      wrap.style.alignItems = 'center';
+
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = String(min);
+      range.max = String(max);
+      range.step = String(step);
+      range.value = String(val);
+      range.style.flex = '1';
+
+      const num = document.createElement('input');
+      num.type = 'number';
+      num.min = String(min);
+      num.max = String(max);
+      num.step = String(step);
+      num.value = String(val);
+      num.style.width = '6rem';
+
+      const applyVal = async (v) => {
+        c.value = String(v);
+        setCtlStatus('sending…', '#b36b00');
+        try {
+          await sendControl({ id: c.id, group: c.group, value: v });
+          setCtlStatus('ok', '#0a7a28');
+        } catch (e) {
+          setCtlStatus('failed: ' + String(e), '#a00');
+        }
+      };
+
+      range.onchange = () => { num.value = range.value; applyVal(range.value); };
+      num.onchange = () => { range.value = num.value; applyVal(num.value); };
+
+      wrap.appendChild(range);
+      wrap.appendChild(num);
+      cell.appendChild(wrap);
+    } else if (type === 2) {
+      // boolean
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.checked = String(c.value) === '1';
+      chk.onchange = async () => {
+        setCtlStatus('sending…', '#b36b00');
+        try {
+          await sendControl({ id: c.id, group: c.group, value: chk.checked ? 1 : 0 });
+          setCtlStatus('ok', '#0a7a28');
+        } catch (e) {
+          setCtlStatus('failed: ' + String(e), '#a00');
+        }
+      };
+      cell.appendChild(chk);
+    } else if (type === 3 && c.menu) {
+      // menu/select
+      const sel = document.createElement('select');
+      for (const [k, v] of Object.entries(c.menu)) {
+        const o = document.createElement('option');
+        o.value = k;
+        o.textContent = v;
+        if (String(c.value) === String(k)) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.onchange = async () => {
+        setCtlStatus('sending…', '#b36b00');
+        try {
+          await sendControl({ id: c.id, group: c.group, value: sel.value });
+          setCtlStatus('ok', '#0a7a28');
+        } catch (e) {
+          setCtlStatus('failed: ' + String(e), '#a00');
+        }
+      };
+      cell.appendChild(sel);
+    } else {
+      const t = document.createElement('span');
+      t.textContent = '(unsupported control type ' + String(c.type) + ')';
+      t.style.color = '#666';
+      cell.appendChild(t);
+    }
+
+    row.appendChild(cell);
+    root.appendChild(row);
+  }
+}
+
+async function loadControls() {
+  setCtlStatus('loading…', '#111');
+  try {
+    const r = await fetch('/mjpeg/input_0.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    renderControls(j);
+    setCtlStatus('loaded', '#0a7a28');
+  } catch (e) {
+    $('controls').textContent = '(controls unavailable — start stream first)';
+    setCtlStatus('failed: ' + String(e), '#a00');
+  }
+}
+
+$('btnCtlLoad').onclick = loadControls;
 load();
 </script>
 </body></html>
@@ -705,6 +910,10 @@ class Handler(BaseHTTPRequestHandler):
         return u.path, urllib.parse.parse_qs(u.query)
 
     def do_GET(self) -> None:
+        if self._path().startswith("/mjpeg/"):
+            if not self._proxy_mjpeg():
+                self._json(502, {"ok": False, "error": "mjpeg backend not reachable (start stream first)"})
+            return
         if self._path() == "/":
             if self._wants_html():
                 raw = _dashboard_html()
@@ -791,6 +1000,65 @@ class Handler(BaseHTTPRequestHandler):
                 }
         except Exception as e:
             return {"ok": False, "url": url, "error": str(e)}
+
+    def _proxy_mjpeg(self) -> bool:
+        """
+        Reverse proxy for the legacy MJPEG HTTP UI, mounted at /mjpeg/.
+        This keeps streamctl (8899) as the single entrypoint.
+        """
+        st = _handle_get()
+        cfg = st.get("config") or {}
+        port = int(cfg.get("http_port") or 8080)
+
+        # Map /mjpeg/<path> to /<path> on the streamer.
+        parsed = urllib.parse.urlparse(self.path)
+        backend_path = parsed.path[len("/mjpeg") :] or "/"
+        if backend_path == "/":
+            backend_path = "/"
+        if parsed.query:
+            backend_path = backend_path + "?" + parsed.query
+
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", backend_path, headers={"Host": f"127.0.0.1:{port}"})
+            resp = conn.getresponse()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return False
+
+        # Send status + headers (drop hop-by-hop headers).
+        self.send_response(resp.status)
+        hop = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
+        for k, v in resp.getheaders():
+            if k.lower() in hop:
+                continue
+            # Rewrite Location headers back under /mjpeg/
+            if k.lower() == "location" and v.startswith("/"):
+                v = "/mjpeg" + v
+            self.send_header(k, v)
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        try:
+            while True:
+                chunk = resp.read(16 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return True
 
 
 def main() -> None:
