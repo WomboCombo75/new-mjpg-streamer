@@ -440,6 +440,7 @@ button{padding:.35rem .75rem;margin-right:.5rem}
 <h2>Camera controls</h2>
 <p>
   <button type="button" id="btnCtlLoad">Load controls</button>
+  <button type="button" id="btnCtlReset" disabled>Reset to defaults</button>
   <span id="ctlStatus"></span>
 </p>
 <div id="controls" style="background:#f7f7f7;border-radius:6px;padding:.75rem;max-height:280px;overflow:auto"></div>
@@ -642,10 +643,14 @@ async function sendControl(control) {
   await fetch(url, { cache: 'no-store' });
 }
 
+let lastControls = [];
+
 function renderControls(j) {
   const root = $('controls');
   root.innerHTML = '';
   const list = (j && j.controls) ? j.controls : [];
+  lastControls = list;
+  $('btnCtlReset').disabled = !list.length;
   if (!list.length) {
     root.textContent = '(no controls)';
     return;
@@ -768,6 +773,39 @@ function renderControls(j) {
   }
 }
 
+async function resetControls() {
+  if (!$('btnCtlReset') || $('btnCtlReset').disabled) return;
+  if (!lastControls || !lastControls.length) return;
+  if (!confirm('Reset all camera controls to their driver defaults?')) return;
+
+  setCtlStatus('resetting…', '#b36b00');
+  let ok = 0, fail = 0, skipped = 0;
+  for (const c of lastControls) {
+    if (parseInt(c.type, 10) === 6) continue; // section header
+    if (c.default === undefined || c.default === null) { skipped++; continue; }
+
+    try {
+      // Mirror the same typing we use in the UI controls.
+      const type = parseInt(c.type, 10);
+      let v;
+      if (type === 2) {
+        v = (String(c.default) === '1') ? 1 : 0;
+      } else {
+        v = String(c.default);
+      }
+      await sendControl({ id: c.id, group: c.group, value: v });
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+
+  // Refresh displayed values after reset.
+  try { await loadControls(); } catch (_) {}
+  if (fail) setCtlStatus(`reset: ${ok} ok, ${fail} failed, ${skipped} skipped`, '#a00');
+  else setCtlStatus(`reset: ${ok} ok, ${skipped} skipped`, '#0a7a28');
+}
+
 async function loadControls() {
   setCtlStatus('loading…', '#111');
   try {
@@ -783,6 +821,7 @@ async function loadControls() {
 }
 
 $('btnCtlLoad').onclick = loadControls;
+$('btnCtlReset').onclick = resetControls;
 load();
 </script>
 </body></html>
