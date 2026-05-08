@@ -1081,13 +1081,17 @@ def main() -> None:
     httpd.timeout = 0.5
 
     def shutdown(*_: Any) -> None:
-        with _lock:
-            _stop_unlocked()
-        httpd.shutdown()
+        if _lock.acquire(timeout=0.5):
+            try:
+                _stop_unlocked()
+            finally:
+                _lock.release()
+        threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
     httpd.serve_forever()
+    httpd.server_close()
 
 
 if __name__ == "__main__":
