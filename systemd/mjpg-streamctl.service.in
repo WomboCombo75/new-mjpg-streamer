@@ -1,0 +1,47 @@
+[Unit]
+Description=MJPG stream control webapp (streamctl_service.py)
+
+# Prefer local disks + basic network stack. Avoid hard dependency on network-online
+# (on some setups network-online waits a long time; streamctl listens without WAN).
+After=local-fs.target network.target sysinit.target
+RequiresMountsFor=@@INSTALL_ROOT@@
+
+[Service]
+Type=simple
+User=@@SERVICE_USER@@
+Group=@@SERVICE_GROUP@@
+WorkingDirectory=@@INSTALL_ROOT@@
+
+# Streamer build dir (mjpg_streamer, *.so, www/)
+Environment=MJPG_STREAMER_ROOT=@@INSTALL_ROOT@@
+
+# Fail fast with a clear journal message if INSTALL_ROOT moved but unit was not reinstalled.
+ExecCondition=/usr/bin/test -d @@INSTALL_ROOT@@
+ExecCondition=/usr/bin/test -f @@INSTALL_ROOT@@/streamctl_service.py
+ExecCondition=/usr/bin/test -x /usr/bin/python3
+
+# Hide the MJPEG HTTP UI behind streamctl (/mjpeg/):
+# output_http will bind only to localhost.
+Environment=MJPG_LISTEN=127.0.0.1
+
+# Control UI + API: http://<host>:8899/  —  LAN-wide; use 127.0.0.1 for localhost-only
+Environment=STREAMCTL_BIND=0.0.0.0
+Environment=STREAMCTL_PORT=8899
+
+# Optional auth for LAN exposure:
+# Environment=STREAMCTL_TOKEN=change-me
+
+# Optional overrides without editing this file:
+#   sudo sh -c 'echo STREAMCTL_BIND=127.0.0.1 >> /etc/default/mjpg-streamctl'
+EnvironmentFile=-/etc/default/mjpg-streamctl
+
+ExecStart=/usr/bin/python3 @@INSTALL_ROOT@@/streamctl_service.py
+
+# Restart briefly after exits (crash or missed socket bind during boot sequencing).
+Restart=always
+RestartSec=3
+StartLimitBurst=15
+StartLimitIntervalSec=120
+
+[Install]
+WantedBy=multi-user.target

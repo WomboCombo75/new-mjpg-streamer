@@ -106,6 +106,12 @@ streamer still uses **8080** by default and is typically bound to localhost.)
 
     sudo ./scripts/install-streamctl-autostart.sh
 
+If the unit **won’t stay up after moving the repo**, reinstall it so `/etc/systemd/system/mjpg-streamctl.service`
+matches your current directory (paths are baked in at install time):
+
+    cd ~/mjpg-streamer    # your clone (spell it mjpg, not mjpeg)
+    sudo ./scripts/install-streamctl-autostart.sh
+
 **Useful commands:**
 
     sudo systemctl status mjpg-streamctl    # running? logs tail
@@ -120,7 +126,8 @@ Create or edit `/etc/default/mjpg-streamctl` with lines such as:
     STREAMCTL_BIND=127.0.0.1
     STREAMCTL_PORT=8899
 
-The unit file is `systemd/mjpg-streamctl.service`.
+The install script generates `/etc/systemd/system/mjpg-streamctl.service` from the template
+`systemd/mjpg-streamctl.service.in` (no hardcoded install path in git; paths are filled in at install time).
 
 **Run the control service manually** (no systemd):
 
