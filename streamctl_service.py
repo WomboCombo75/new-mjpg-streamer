@@ -1078,6 +1078,8 @@ def main() -> None:
         file=sys.stderr,
     )
 
+    httpd.timeout = 0.5
+
     def shutdown(*_: Any) -> None:
         with _lock:
             _stop_unlocked()
