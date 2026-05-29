@@ -1,187 +1,316 @@
-mjpg-streamer
-=============
+# mjpg-streamer
 
-This is a fork of http://sourceforge.net/projects/mjpg-streamer/ with added support for the Raspberry Pi camera via the input_raspicam plugin.
+Fork of [mjpg-streamer](http://sourceforge.net/projects/mjpg-streamer/) with a browser control UI (`streamctl_service.py`) for starting/stopping the stream and changing camera settings.
 
-mjpg-streamer is a command line application that copies JPEG frames from one
-or more input plugins to multiple output plugins. It can be used to stream
-JPEG files over an IP-based network from a webcam to various types of viewers
-such as Chrome, Firefox, Cambozola, VLC, mplayer, and other software capable
-of receiving MJPG streams.
+mjpg-streamer copies JPEG frames from input plugins (webcam, file, HTTP proxy, …) to output plugins (HTTP server, file, …). Viewers include Chrome, Firefox, VLC, and any app that accepts an MJPEG HTTP URL.
 
-It was originally written for embedded devices with very limited resources in
-terms of RAM and CPU. Its predecessor "uvc_streamer" was created because
-Linux-UVC compatible cameras directly produce JPEG-data, allowing fast and
-perfomant M-JPEG streams even from an embedded device running OpenWRT. The
-input module "input_uvc.so" captures such JPG frames from a connected webcam.
-mjpg-streamer now supports a variety of different input devices.
+## Security warning
 
-Security warning
-----------------
+**Do not expose mjpg-streamer on untrusted networks.** Anyone who can reach the control port or stream URL can view (and, via the control UI, change) your camera stream.
 
-**WARNING**: mjpg-streamer should not be used on untrusted networks!
-By default, anyone with access to the network that mjpg-streamer is running
-on will be able to access it.
+Bind the control service to localhost when possible (`STREAMCTL_BIND=127.0.0.1` in `/etc/default/mjpg-streamctl`) and restrict access with a firewall or reverse proxy.
 
-Plugins
--------
+---
 
-Input plugins:
+## Quick start (Raspberry Pi / Debian)
 
-* input_file
-* input_http
-* input_opencv ([documentation](plugins/input_opencv/README.md))
-* input_ptp2
-* input_raspicam ([documentation](plugins/input_raspicam/README.md))
-* input_uvc ([documentation](plugins/input_uvc/README.md))
+```bash
+# 1. Dependencies (see table below for older distros)
+sudo apt-get update
+sudo apt-get install -y git cmake libjpeg-dev libjpeg62-turbo-dev gcc g++ make libv4l-dev
 
-Output plugins:
+# 2. Clone and build
+git clone https://github.com/WomboCombo75/new-mjpg-streamer.git
+cd new-mjpg-streamer
+make
+sudo make install
 
-* output_file
-* output_http ([documentation](plugins/output_http/README.md))
-* ~output_rtsp~ (not functional)
-* ~output_udp~ (not functional)
-* output_viewer ([documentation](plugins/output_viewer/README.md))
-* output_zmqserver ([documentation](plugins/output_zmqserver/README.md))
-
-Building & Installation
-=======================
-
-You must have cmake installed. You will also probably want to have a development
-version of libjpeg installed. I used libjpeg8-dev. e.g.
-
-    sudo apt-get install cmake libjpeg8-dev
-
-If you do not have gcc (and g++ for the opencv plugin) you may need to install those.
-
-    sudo apt-get install gcc g++
-
-Simple compilation
-------------------
-
-This will build and install all plugins that can be compiled.
-
-    make
-    sudo make install
-    
-By default, everything will be compiled in "release" mode. If you wish to compile
-with debugging symbols enabled, you can do this:
-
-    make distclean
-    make CMAKE_BUILD_TYPE=Debug
-    sudo make install
-    
-Advanced compilation (via CMake)
---------------------------------
-
-There are options available to enable/disable plugins, setup options, etc. This
-shows the basic steps to enable the experimental HTTP management feature:
-
-    mkdir _build
-    cd _build
-    cmake -DENABLE_HTTP_MANAGEMENT=ON ..
-    make
-    sudo make install
-
-Usage
-=====
-From the project folder:
+# 3. Enable the web control UI at boot (recommended)
+sudo ./scripts/install-streamctl-autostart.sh
 ```
+
+Open in a browser:
+
+| What | URL |
+|------|-----|
+| Control page | `http://<pi-ip>:8899/?html=1` |
+| MJPEG stream (embed in apps) | `http://<pi-ip>:8899/mjpeg/?action=stream` |
+| Snapshot | `http://<pi-ip>:8899/mjpeg/?action=snapshot` |
+
+Use the control page to pick `/dev/video0` (or another device), resolution, FPS, and start the stream.
+
+---
+
+## Build dependencies
+
+### Debian 12 / 13, Raspberry Pi OS Bookworm / Trixie (recommended)
+
+`libjpeg8-dev` **no longer exists** on current Debian. Use:
+
+```bash
+sudo apt-get install -y cmake libjpeg-dev libjpeg62-turbo-dev gcc g++ make libv4l-dev
+```
+
+| Package | Purpose |
+|---------|---------|
+| `cmake`, `gcc`, `g++`, `make` | Build system |
+| `libjpeg-dev` | JPEG headers/libs (metapackage) |
+| `libjpeg62-turbo-dev` | Actual libjpeg-turbo development files |
+| `libv4l-dev` | Video4Linux — needed for `input_uvc` (USB / libcamera webcams) |
+
+Optional packages (only if you need those plugins):
+
+```bash
+# OpenCV input plugin
+sudo apt-get install -y libopencv-dev
+
+# SDL viewer output plugin
+sudo apt-get install -y libsdl1.2-dev
+
+# PTP2 / gPhoto2 input plugin
+sudo apt-get install -y libgphoto2-dev
+```
+
+### Older Debian / Raspberry Pi OS (Bullseye and earlier)
+
+```bash
+sudo apt-get install -y cmake libjpeg8-dev gcc g++ make libv4l-dev
+```
+
+---
+
+## Which camera plugin do I need?
+
+| Camera | Plugin | Notes |
+|--------|--------|-------|
+| USB webcam | `input_uvc` | Built on all systems with `libv4l-dev` |
+| Raspberry Pi Camera Module (libcamera stack) | `input_uvc` | Appears as `/dev/video0`, `/dev/video1`, … — use the control page device list |
+| Legacy Pi camera (MMAL, `/opt/vc`) | `input_raspicam` | Only built if `/opt/vc/include` exists (old Raspberry Pi userland). **Not available** on modern Pi OS without legacy stack |
+
+After `make`, CMake prints which plugins were enabled or skipped. You only need `input_uvc` + `output_http` for typical USB/libcamera setups.
+
+List video devices:
+
+```bash
+ls -l /dev/video*
+v4l2-ctl --list-devices   # from package v4l-utils (optional)
+```
+
+---
+
+## Build and install
+
+From the repository root:
+
+```bash
+make
+sudo make install
+```
+
+This installs:
+
+- `/usr/local/bin/mjpg_streamer`
+- Plugins under `/usr/local/lib/mjpg-streamer/`
+- Static web files under `/usr/local/share/mjpg-streamer/www/`
+
+The top-level `Makefile` also copies `mjpg_streamer` and `*.so` into the repo directory so you can run without installing:
+
+```bash
 export LD_LIBRARY_PATH=.
-./mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so"
+./mjpg_streamer -i "input_uvc.so -d /dev/video0" -o "output_http.so -w ./www"
 ```
 
-See [README.md](README.md) or the individual plugin's documentation for more details.
+### Debug build
 
-Stream control webapp (autostart)
----------------------------------
+```bash
+make distclean
+make CMAKE_BUILD_TYPE=Debug
+sudo make install
+```
 
-This fork includes `streamctl_service.py`: a small HTTP
-service with a browser page to start/stop the stream and change device, resolution,
-FPS, and HTTP port. It listens on **8899** by default; the MJPEG pages from
-`output_http` are **proxied under `http://<pi-ip>:8899/mjpeg/`**. (Internally the
-streamer still uses **8080** by default and is typically bound to localhost.)
+### Advanced (CMake options)
 
-**Install and enable at boot (systemd):**
+```bash
+mkdir _build && cd _build
+cmake -DENABLE_HTTP_MANAGEMENT=ON ..
+make
+sudo make install
+```
 
-    sudo ./scripts/install-streamctl-autostart.sh
+See individual plugin READMEs under `plugins/` for plugin-specific options.
 
-If the unit **won’t stay up after moving the repo**, reinstall it so `/etc/systemd/system/mjpg-streamctl.service`
-matches your current directory (paths are baked in at install time):
+---
 
-    cd ~/mjpg-streamer    # your clone (spell it mjpg, not mjpeg)
-    sudo ./scripts/install-streamctl-autostart.sh
+## Stream control webapp (autostart)
 
-**Useful commands:**
+This fork includes **`streamctl_service.py`**: a small HTTP service with a browser UI to start/stop the stream and change device, resolution, FPS, and HTTP port.
 
-    sudo systemctl status mjpg-streamctl    # running? logs tail
-    sudo systemctl restart mjpg-streamctl   # reload after code or unit changes
-    sudo systemctl stop mjpg-streamctl       # stop the control service only
-    sudo systemctl disable --now mjpg-streamctl   # remove from autostart and stop
+- Control UI listens on **8899** by default (`STREAMCTL_BIND`, `STREAMCTL_PORT`).
+- The MJPEG HTTP server from `output_http` runs on **8080** by default, bound to **localhost**.
+- Stream pages are **proxied** at `http://<host>:8899/mjpeg/` so you only expose one port.
 
-**Optional settings** (then `sudo systemctl restart mjpg-streamctl`):
+### Install and enable at boot
 
-Create or edit `/etc/default/mjpg-streamctl` with lines such as:
+Run from the **repo root** (paths are recorded in the systemd unit at install time):
 
-    STREAMCTL_BIND=127.0.0.1
-    STREAMCTL_PORT=8899
+```bash
+sudo ./scripts/install-streamctl-autostart.sh
+```
 
-The install script generates `/etc/systemd/system/mjpg-streamctl.service` from the template
-`systemd/mjpg-streamctl.service.in` (no hardcoded install path in git; paths are filled in at install time).
+If you **move or rename the clone**, reinstall so the unit points at the new directory:
 
-**Run the control service manually** (no systemd):
+```bash
+cd ~/new-mjpg-streamer   # your actual clone path
+sudo ./scripts/install-streamctl-autostart.sh
+```
 
-    python3 streamctl_service.py
+### Service commands
 
-Open `http://<pi-ip>:8899/?html=1` in a browser for the control page.
+```bash
+sudo systemctl status mjpg-streamctl
+sudo systemctl restart mjpg-streamctl
+sudo systemctl stop mjpg-streamctl
+sudo systemctl disable --now mjpg-streamctl   # remove from boot and stop
+```
 
-The page includes **camera controls** (brightness/contrast/etc.) and a **Live preview**
-so you can see changes immediately.
+### Optional configuration
 
-Client integration (JS / Java / VLC)
------------------------------------
+Create or edit `/etc/default/mjpg-streamctl`:
 
-The stream is standard MJPEG over HTTP:
+```bash
+# Listen on localhost only (safer on LAN)
+STREAMCTL_BIND=127.0.0.1
+STREAMCTL_PORT=8899
 
-- **MJPEG stream URL (recommended)**: `http://<pi-ip>:8899/mjpeg/?action=stream`
-- **Snapshot URL (recommended)**: `http://<pi-ip>:8899/mjpeg/?action=snapshot`
+# Optional API token (see streamctl_service.py)
+# STREAMCTL_TOKEN=change-me
+```
 
-**JavaScript (web page)**:
+Then: `sudo systemctl restart mjpg-streamctl`
+
+The unit template is `systemd/mjpg-streamctl.service.in`; the install script generates `/etc/systemd/system/mjpg-streamctl.service`.
+
+### Run manually (no systemd)
+
+```bash
+cd /path/to/new-mjpg-streamer
+python3 streamctl_service.py
+```
+
+Open `http://<pi-ip>:8899/?html=1`.
+
+---
+
+## Usage examples
+
+### USB / libcamera webcam (installed binary)
+
+```bash
+/usr/local/bin/mjpg_streamer \
+  -i "input_uvc.so -d /dev/video0" \
+  -o "output_http.so -w /usr/local/share/mjpg-streamer/www"
+```
+
+Stream: `http://<pi-ip>:8080/?action=stream`
+
+### Legacy Raspberry Pi camera (`input_raspicam`, if built)
+
+```bash
+export LD_LIBRARY_PATH=/usr/local/lib/mjpg-streamer
+/usr/local/bin/mjpg_streamer \
+  -i "input_raspicam.so -x 1280 -y 720 -fps 15" \
+  -o "output_http.so -w /usr/local/share/mjpg-streamer/www"
+```
+
+See [plugins/input_raspicam/README.md](plugins/input_raspicam/README.md) for raspicam options.
+
+### With streamctl (recommended)
+
+Use the control page — no manual command line needed. Embed the proxied URL:
 
 ```html
-<img src="http://<pi-ip>:8899/mjpeg/?action=stream" />
+<img src="http://<pi-ip>:8899/mjpeg/?action=stream" alt="Live stream" />
 ```
 
-**VLC / VideoLAN**:
+**VLC:** Media → Open Network Stream → `http://<pi-ip>:8899/mjpeg/?action=stream`
 
-- Open Network Stream → `http://<pi-ip>:8899/mjpeg/?action=stream`
+---
 
-**Java**:
+## Troubleshooting
 
-- Use any MJPEG-capable viewer/library and point it at `http://<pi-ip>:8080/?action=stream`.
-  (We removed the old Java applet pages from `www/`; modern browsers don’t support them anyway.)
+### `apt-get install libjpeg8-dev` fails
 
-Discussion / Questions / Help
-=============================
+On Debian 12+ / current Raspberry Pi OS, that package was removed. Install `libjpeg-dev` and `libjpeg62-turbo-dev` instead (see [Build dependencies](#build-dependencies)).
 
-Probably best in this thread
-http://www.raspberrypi.org/phpBB3/viewtopic.php?f=43&t=45178
+### `make` succeeds but `input_raspicam` is disabled
 
-Authors
-=======
+Expected on systems without legacy `/opt/vc` (MMAL). Use **`input_uvc`** with your `/dev/video*` device instead.
 
-mjpg-streamer was originally created by Tom Stöveken, and has received
-improvements from many collaborators since then.
+### No `/dev/video*` devices
 
+- Enable the camera in `raspi-config` (Pi Camera Module).
+- For USB: check `lsusb`, try another port/cable.
+- Install `v4l-utils` and run `v4l2-ctl --list-devices`.
 
-License
-=======
+### Control page does not load after boot
 
-mjpg-streamer is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; version 2 of the License.
+```bash
+sudo systemctl status mjpg-streamctl
+journalctl -u mjpg-streamctl -n 50 --no-pager
+```
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
-GNU General Public License for more details.
+Common fixes:
+
+- Re-run `sudo ./scripts/install-streamctl-autostart.sh` after moving the repo.
+- Try `http://127.0.0.1:8899/?html=1` instead of `localhost` (IPv6 quirks).
+- Ensure `python3` is installed.
+
+### Stream URL works on the Pi but not from another machine
+
+- Confirm `STREAMCTL_BIND` is not `127.0.0.1` if you need LAN access (default in the generated unit is `0.0.0.0`).
+- Check firewall: `sudo ufw status` or allow port 8899.
+
+### Blank or frozen browser preview
+
+- Lower resolution/FPS in the control page.
+- Try snapshot URL first: `http://<pi-ip>:8899/mjpeg/?action=snapshot`
+- Check another viewer (VLC) to isolate browser issues.
+
+---
+
+## Plugins
+
+### Input
+
+| Plugin | Description |
+|--------|-------------|
+| `input_file` | Read JPEG files from disk |
+| `input_http` | HTTP input proxy |
+| `input_uvc` | Video4Linux (USB webcams, libcamera V4L2) — [docs](plugins/input_uvc/README.md) |
+| `input_raspicam` | Legacy Pi camera (MMAL) — [docs](plugins/input_raspicam/README.md) |
+| `input_opencv` | OpenCV — [docs](plugins/input_opencv/README.md) |
+| `input_ptp2` | PTP2 cameras |
+
+### Output
+
+| Plugin | Description |
+|--------|-------------|
+| `output_http` | HTTP MJPEG server — [docs](plugins/output_http/README.md) |
+| `output_file` | Write JPEG files |
+| `output_viewer` | SDL viewer — [docs](plugins/output_viewer/README.md) |
+| `output_zmqserver` | ZMQ — [docs](plugins/output_zmqserver/README.md) |
+| `output_rtsp` / `output_udp` | Present in tree; not fully functional |
+
+---
+
+## Discussion
+
+Historical thread: [Raspberry Pi forum](http://www.raspberrypi.org/phpBB3/viewtopic.php?f=43&t=45178)
+
+## Authors
+
+mjpg-streamer was originally created by Tom Stöveken, with contributions from many others.
+
+## License
+
+GNU General Public License v2. See [LICENSE](www/LICENSE.txt) in the bundled web assets and plugin sources for details.
